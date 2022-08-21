@@ -1,7 +1,7 @@
 import pandas as pd
 import re
 import numpy as np
-from scipy.stats import fisher_exact
+import statsmodels.api as sm
 
 
 def get_dx_cols(all_cols):
@@ -26,6 +26,13 @@ def make_crosstab(exposure_group: pd.DataFrame, control_group: pd.DataFrame) -> 
     
     return crosstab
 
+def odds_ci(cross_tab, odds_ratio: float, confidence=0.95) -> tuple:
+    z_confidence = 1.96  # TODO: fix magic number
+    root = np.sqrt(sum([1 / x for x in cross_tab.values.flatten()]))
+    base = np.log(odds_ratio)
+    ci = (np.exp(base - z_confidence * root), np.exp(base + z_confidence * root))
+    return ci
+
 
 surgical_emergency_codes = [
     "5409", "5400", "5401",  # Acute appendicitis
@@ -36,7 +43,7 @@ surgical_emergency_codes = [
 ]
 
 if __name__ == "__main__":
-    morbidity = "CM_CHRNLUNG"
+    morbidity = "CM_DM"
     se_df = pd.read_csv("cache/acs.csv", low_memory=False)
     #se_df = se_df[se_df["TRAN_IN"] == 0]
     se_df = se_df[se_df["TRAN_OUT"] == 0]
@@ -89,13 +96,13 @@ if __name__ == "__main__":
     mortality_no_access = len(no_access_group[no_access_group["DIED"] == 1])
     lived_no_access = len(no_access_group[no_access_group["DIED"] == 0])
 
-    crosstab = np.array([[mortality_access, lived_access], [mortality_no_access, lived_no_access]])
+    crosstab = sm.stats.Table2x2(np.array([[mortality_access, lived_access], [mortality_no_access, lived_no_access]]))
 
     print(crosstab)
 
-    odds, pval = fisher_exact(crosstab)
-    print(f"Odds: {odds}")
-    print(f"P value: {pval}")
+    print(f"Odds: {crosstab.oddsratio}")
+    print(f"P value: {crosstab.oddsratio_pvalue()}")
+    print(f"Confidence interval: {crosstab.oddsratio_confint()}")
 
 
     print("Odds for entire dataset")
@@ -105,13 +112,12 @@ if __name__ == "__main__":
     mortality_no_dm = len(se_df[(se_df[morbidity] == 0) & (se_df["DIED"] == 1)])
     lived_no_dm = len(se_df[(se_df[morbidity] == 0) & (se_df["DIED"] == 0)])
 
-    crosstab = np.array([[mortality_no_dm, lived_no_dm], [mortality_dm, lived_dm]])
-
+    crosstab = sm.stats.Table2x2(np.array([[mortality_dm, lived_dm], [mortality_no_dm, lived_no_dm]]))
     print(crosstab)
 
-    odds, pval = fisher_exact(crosstab)
-    print(f"Odds: {odds}")
-    print(f"P value: {pval}")
+    print(f"Odds: {crosstab.oddsratio}")
+    print(f"P value: {crosstab.oddsratio_pvalue()}")
+    print(f"Confidence interval: {crosstab.oddsratio_confint()}")
 
 
 

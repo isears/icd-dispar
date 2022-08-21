@@ -15,7 +15,7 @@ surgical_emergency_codes = {
 
 def do_lr(df, formula_str):
     lr = sm.logit(formula_str, data=df)
-    res = lr.fit()
+    res = lr.fit_regularized(maxiter=1000)
 
     odds_ratios = np.exp(res.params)
     lower_ci = np.exp(res.conf_int()[0])
@@ -34,16 +34,18 @@ def do_lr(df, formula_str):
 if __name__ == "__main__":
     comorbidity = "CM_DM"
     se_df = pd.read_csv("cache/acs.csv", low_memory=False)
-    assert (se_df["TRAN_OUT"] == 0).all()
+    se_df = se_df[se_df["TRAN_OUT"] == 0]
+    assert se_df["TRAN_OUT"].sum() == 0
 
     other_cms = [c for c in se_df.columns if c.startswith("CM_") and c != comorbidity]
 
 
     # First do baseline LR to show risk of mortality (controlled for APRDRG_Risk_Mortality) of the chosen comorbidity
-    baseline_df = se_df[["DIED", comorbidity] + other_cms].dropna()
+    baseline_df = se_df[["DIED", "AGE", "acs_type", comorbidity] + other_cms].dropna()
     # formula_str = f"DIED ~ APRDRG_Risk_Mortality + {comorbidity}"
-    formula_str = f"DIED ~ " + " + ".join([comorbidity] + other_cms)
-    do_lr(baseline_df, formula_str)
+    formula_str = f"DIED ~ " + " + ".join([comorbidity] + other_cms + ["AGE", "C(acs_type)"])
+    res_df = do_lr(baseline_df, formula_str)
+    res_df.to_csv(f"results/baseline_lr_{comorbidity}.csv")
 
     def label_groups(r):
         # first determine if demographics are right
@@ -57,7 +59,7 @@ if __name__ == "__main__":
     se_df["Group"] = se_df.apply(label_groups, axis=1)
     access = se_df[se_df["Group"] == "HighHealthcareAccess_Comorbidity+"]
     noaccess = se_df[se_df["Group"] == "LowHealthcareAccess_Comorbidity-"]
-    se_df = se_df[["Group", "DIED"] + other_cms].dropna()
+    se_df = se_df[["Group", "DIED", "AGE", "acs_type"] + other_cms].dropna()
 
     # Remove low-prevalence CMs
     dropped_cms = list()
@@ -71,7 +73,8 @@ if __name__ == "__main__":
             se_df = se_df.drop(columns=[cm])
             dropped_cms.append(cm)
 
-    formula_str = "DIED ~ C(Group, Treatment(reference='HighHealthcareAccess_Comorbidity+')) + " + " + ".join([c for c in other_cms if c not in dropped_cms]) 
+    formula_str = "DIED ~ C(Group, Treatment(reference='HighHealthcareAccess_Comorbidity+')) + " + " + ".join([c for c in other_cms if c not in dropped_cms] + ["AGE", "C(acs_type)"]) 
     print(formula_str)
 
     res_df = do_lr(se_df, formula_str)
+    res_df.to_csv(f"results/adjustedor_{comorbidity}.csv")

@@ -27,8 +27,10 @@ def process_chunk(chunk):
         print(f"Spawned chunk worker {os.getpid()}")
         start = timer()
         dx_columns = get_dx_cols(chunk.columns)
-        saved_parts = list()
+        # Initial filtering
+        chunk = chunk[chunk["TRAN_OUT"] == 0]
 
+        saved_parts = list()
         for dx_category, codes in DX_CODES.items():
             dx_only = chunk[chunk[dx_columns].isin(codes).any("columns")]
             dx_only["acs_type"] = dx_category
@@ -48,7 +50,7 @@ def process_single_file(fname):
     dx_columns = get_dx_cols(columns)
     used_columns = dx_columns
     used_columns += [c for c in columns if c.startswith("CM_")]
-    used_columns += ["TRAN_OUT", "AGE", "APRDRG_Risk_Mortality", "APRDRG_Severity", "FEMALE", "ZIPINC_QRTL", "PAY1", "RACE", "HOSP_REGION"]
+    used_columns += ["DIED", "TRAN_OUT", "TRAN_IN", "AGE", "APRDRG_Risk_Mortality", "APRDRG_Severity", "FEMALE", "ZIPINC_QRTL", "PAY1", "RACE", "HOSP_REGION"]
     print(f"[{fname}] Using columns:")
     print(used_columns)
 

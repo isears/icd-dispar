@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -n 1
 #SBATCH -p debug
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=16
 #SBATCH --mem=32G
 #SBATCH --time=00:20:00
 #SBATCH --output ./logs/debug-%j.log

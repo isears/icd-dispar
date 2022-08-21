@@ -1,12 +1,23 @@
+from asyncio import futures
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import wait
 import glob
 import re
+import os
+from timeit import default_timer as timer
+
+
+pd.options.mode.chained_assignment = None
 
 # https://www.icd10data.com/ICD10CM/Codes/K00-K95/K35-K38/K35-#K35.2
-DX_CODES = [
-    "K35", "K352", "K3521", "K3520", "K353", "K3530", "K3532", "K3533", "K3531", "K358", "K3580", "K3589", "K35890", "K35891", "5400", "5401", "5409", "540"
-]
+DX_CODES = {
+    "acute_appendicitis": ["5409", "5400", "5401"],  # Acute appendicitis
+    "acute_cholecystitis": ["5750"],  # Acute cholecystitis
+    "necrotizing_fasciitis": ["72886"], # Necrotizing fasciitis
+    "perforated_diverticulitis": ["56210", "56211", "56213"], # Perforated diverticulitis
+    "acute_perforated_duodenal_ulcer": ["5321"],  # Acute perforated duodenal ulcer
+}
 
 def get_dx_cols(all_cols):
     icd9_cols = [col for col in all_cols if re.search("^DX[0-9]{1,2}$", col)]
@@ -14,50 +25,57 @@ def get_dx_cols(all_cols):
 
     return icd9_cols + icd10_cols
 
+def process_chunk(chunk):
+        print(f"Spawned chunk worker {os.getpid()}")
+        start = timer()
+        dx_columns = get_dx_cols(chunk.columns)
+        saved_parts = list()
 
-def has_appendicitis(row):
-    for c in DX_CODES:
-        if row.str.startswith(c).any():
-            return True
+        for dx_category, codes in DX_CODES.items():
+            dx_only = chunk[chunk[dx_columns].isin(codes).any("columns")]
+            dx_only["acs_type"] = dx_category
 
-    return False
+            saved_parts.append(dx_only)
 
+
+        end = timer()
+        print(f"Chunk workder {os.getpid()} finished in {end - start}")
+        return pd.concat(saved_parts)
 
 def process_single_file(fname):
     print(f"[*] Processing {fname}")
     df  = pd.DataFrame()
 
     columns = next(pd.read_stata(fname, chunksize=1)).columns
-    dx_cols = get_dx_cols(columns)
-    dx_cols += ["DISCWT"]
+    dx_columns = get_dx_cols(columns)
+    used_columns = dx_columns
+    used_columns += [c for c in columns if c.startswith("CM_")]
+    used_columns += ["TRAN_OUT", "AGE", "APRDRG_Risk_Mortality", "APRDRG_Severity", "FEMALE", "ZIPINC_QRTL", "PAY1", "RACE", "HOSP_REGION"]
     print(f"[{fname}] Using columns:")
-    print(dx_cols)
+    print(used_columns)
 
-    total_admissions = 0
-    total_appendicits = 0
+    with ProcessPoolExecutor(max_workers=16) as exe:
+        chunk_generator = pd.read_stata(fname, chunksize=1000000, columns=used_columns)
 
-    for chunk in pd.read_stata(fname, chunksize=100000, columns=dx_cols):
-        total_admissions += len(chunk)
-        chunk = chunk[chunk.isin(DX_CODES).any("columns")]
+        futures = list()
+        for chunk in chunk_generator:
+            futures.append(exe.submit(process_chunk, chunk))
 
-        total_appendicits += len(chunk)
+        wait(futures)
 
-        df = pd.concat([df, chunk])
+        results = [f.result() for f in futures]
 
-
-    print(f"[{fname}] Total admissions: {total_admissions}")
-    print(f"[{fname}] Total appendicitis: {total_appendicits}")
+    
+    df = pd.concat(results)
 
     print(f"[+] Finished processing: {fname}")
 
-    df.to_csv(f"cache/{fname.split('/')[-1]}.appendicitis.csv", index=False)
     return df
 
 
 
 if __name__ == "__main__":
-    files_to_process = list(glob.glob("data/*.dta"))
-    #files_to_process = ["data/NIS_2016_Full.dta"]
+    files_to_process = [f"data/NIS_{idx}_Full.dta" for idx in range(2010, 2015)]
     print("Files:")
     print(files_to_process)
 
@@ -66,9 +84,10 @@ if __name__ == "__main__":
 
     print("-"*10)
 
-    with ProcessPoolExecutor(max_workers=30) as exe:        
-        results = exe.map(process_single_file,files_to_process)
+    results = list()
+    for fname in files_to_process:
+        results.append(process_single_file(fname))
     
     df = pd.concat(results)
     df.info()
-    df.to_csv("cache/bla.csv", index=False)
+    df.to_csv("cache/acs.csv", index=False)

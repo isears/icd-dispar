@@ -1,0 +1,3 @@
+,Odds Ratios,CI Lower,CI Upper,P Value
+"C(Group, Treatment(reference='HighHealthcareAccess_Comorbidity+'))[T.LowHealthcareAccess_Comorbidity-]",1.9822807068384958,1.4225285912294243,2.7622902097933224,5.305369850525686e-05
+APRDRG_Risk_Mortality,8.488045600019836,6.81373861006821,10.573771938001434,3.8746743507313144e-81

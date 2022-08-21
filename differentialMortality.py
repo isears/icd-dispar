@@ -10,6 +10,23 @@ def get_dx_cols(all_cols):
 
     return icd9_cols + icd10_cols
 
+"""
+Cross tab format:
+
+            Disease     No Disease
+Exposure
+No Exposure
+"""
+def make_crosstab(exposure_group: pd.DataFrame, control_group: pd.DataFrame) -> np.ndarray:
+    crosstab = np.zeros((2,2))
+    crosstab[0,0] = len(exposure_group[exposure_group["DIED"] == 1])
+    crosstab[0,1] = len(exposure_group[exposure_group["DIED"] == 0])
+    crosstab[1,0] = len(control_group[control_group["DIED"] == 1])
+    crosstab[1,1] = len(control_group[control_group["DIED"] == 0])
+    
+    return crosstab
+
+
 surgical_emergency_codes = [
     "5409", "5400", "5401",  # Acute appendicitis
     "5750",  # Acute cholecystitis
@@ -19,9 +36,10 @@ surgical_emergency_codes = [
 ]
 
 if __name__ == "__main__":
+    morbidity = "CM_CHRNLUNG"
     se_df = pd.read_csv("cache/acs.csv", low_memory=False)
     #se_df = se_df[se_df["TRAN_IN"] == 0]
-    #se_df = se_df[se_df["TRAN_OUT"] == 0]
+    se_df = se_df[se_df["TRAN_OUT"] == 0]
 
     """
     Access group:
@@ -31,7 +49,18 @@ if __name__ == "__main__":
     - Private insurance
     """
     def filter_access(r):
-        return r["RACE"] == 1 and r["ZIPINC_QRTL"] == 4 and r["PAY1"] == 3 and r["CM_CHRNLUNG"] == 1
+        # first determine if demographics are right
+        demo_filter = r["RACE"] == 1 and r["ZIPINC_QRTL"] == 4 and r["FEMALE"] == 0 and r["PAY1"] == 3
+
+        if demo_filter:
+            # Dropping other CMs leaves 0 cases!
+            # cm_columns = [c for c in r.index if c.startswith("CM_") and c != morbidity]
+
+            # # only CM is DM
+            # return r[cm_columns].sum() == 0 and r[morbidity] ==1
+            return r[morbidity] == 1
+        else:
+            return False
 
     access_group = se_df[se_df.apply(filter_access, axis=1)]
 
@@ -43,9 +72,15 @@ if __name__ == "__main__":
     - Non-private / Non-medicare insurance
     """
     def filter_no_access(r):
-        return r["RACE"] == 2 and r["ZIPINC_QRTL"] == 1 and (not r["PAY1"] in [1, 3, 6]) and r["CM_CHRNLUNG"] == 0
+        demo_filter = r["RACE"] == 2 and r["ZIPINC_QRTL"] == 1 and r["FEMALE"] == 0 and (not r["PAY1"] in [1, 3, 6])
+
+        if demo_filter:
+            return r[morbidity] == 0
+        else:
+            return False
 
 
+    print("Odds for access vs no-access group:")
     no_access_group = se_df[se_df.apply(filter_no_access, axis=1)]
 
     mortality_access = len(access_group[access_group["DIED"] == 1])
@@ -62,11 +97,13 @@ if __name__ == "__main__":
     print(f"Odds: {odds}")
     print(f"P value: {pval}")
 
-    mortality_dm = len(se_df[(se_df["CM_CHRNLUNG"] == 1) & (se_df["DIED"] == 1)])
-    lived_dm = len(se_df[(se_df["CM_CHRNLUNG"] == 1) & (se_df["DIED"] == 0)])
 
-    mortality_no_dm = len(se_df[(se_df["CM_CHRNLUNG"] == 0) & (se_df["DIED"] == 1)])
-    lived_no_dm = len(se_df[(se_df["CM_CHRNLUNG"] == 0) & (se_df["DIED"] == 0)])
+    print("Odds for entire dataset")
+    mortality_dm = len(se_df[(se_df[morbidity] == 1) & (se_df["DIED"] == 1)])
+    lived_dm = len(se_df[(se_df[morbidity] == 1) & (se_df["DIED"] == 0)])
+
+    mortality_no_dm = len(se_df[(se_df[morbidity] == 0) & (se_df["DIED"] == 1)])
+    lived_no_dm = len(se_df[(se_df[morbidity] == 0) & (se_df["DIED"] == 0)])
 
     crosstab = np.array([[mortality_no_dm, lived_no_dm], [mortality_dm, lived_dm]])
 

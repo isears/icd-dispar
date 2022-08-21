@@ -1,7 +1,5 @@
-from asyncio import futures
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor
-from concurrent.futures import wait
 import glob
 import re
 import os
@@ -54,16 +52,9 @@ def process_single_file(fname):
     print(f"[{fname}] Using columns:")
     print(used_columns)
 
-    with ProcessPoolExecutor(max_workers=16) as exe:
+    with ProcessPoolExecutor(max_workers=len(os.sched_getaffinity(0))) as exe:
         chunk_generator = pd.read_stata(fname, chunksize=1000000, columns=used_columns)
-
-        futures = list()
-        for chunk in chunk_generator:
-            futures.append(exe.submit(process_chunk, chunk))
-
-        wait(futures)
-
-        results = [f.result() for f in futures]
+        results = exe.map(process_chunk, chunk_generator)
 
     
     df = pd.concat(results)

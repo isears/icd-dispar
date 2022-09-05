@@ -1,13 +1,4 @@
-- appendicitis; should be younger
-- perforated diverticulitis; should be older
-- acute cholecystitis
-- Perforated peptic ulcer disease
-- Necrotizing soft tissue infection
-
-- Filter out "transfered out" group
-- Reference group: Private Insurance status, white, male, high income quartile + diabetes
-    - vs. No insurance / medicaid, black, male, low income quartile - diabetes
-
-- Heart failure / heart disease 
-- use CM_DM column for diabetes-diagnosed-on-presentation
-    - CM_LUNG also
+- Drop race / gender from low-access / high-access groupings
+- Use some form of complication rather than in-hospital mortality
+- Calculate high-access group only complication rate
+- Take out necrotizing fasciitis

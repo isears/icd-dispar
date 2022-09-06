@@ -11,9 +11,11 @@ pd.options.mode.chained_assignment = None
 DX_CODES = {
     # "acute_appendicitis": ["5409", "5400", "5401"],  # Acute appendicitis
     # "acute_cholecystitis": ["5750"],  # Acute cholecystitis
-    # "perforated_diverticulitis": ["56210", "56211", "56213"], # Perforated diverticulitis
+    "perforated_diverticulitis": ["56213"], # Perforated diverticulitis
+    "nonperforated_diverticulitis": ["56211"]
     # "acute_perforated_duodenal_ulcer": ["5321"],  # Acute perforated duodenal ulcer
-    "postoperative_infection": ["9985", "99851", "99859"]
+    #"postoperative_infection": ["9985", "99851", "99859"]
+
 }
 
 def get_dx_cols(all_cols):
@@ -22,10 +24,18 @@ def get_dx_cols(all_cols):
 
     return icd9_cols + icd10_cols
 
+def get_proc_cols(all_cols):
+    icd9_cols = [col for col in all_cols if re.search("^PR[0-9]{1,2}$", col)]
+    icd10_cols = [col for col in all_cols if re.search("^I10_PR[0-9]{1,2}$", col)]
+
+    return icd9_cols + icd10_cols
+
 def process_chunk(chunk):
         dx_columns = get_dx_cols(chunk.columns)
-        chunk["postoperative_infection"] = chunk[dx_columns].isin(["9985", "99851", "99859"]).any("columns").astype("int")
-        chunk = chunk[(chunk["ORPROC"] == 1) | (chunk["postoperative_infection"] == 1)]
+        codes_of_interest = sum([val for _, val in DX_CODES.items()], [])
+
+        chunk = chunk[chunk[dx_columns].isin(codes_of_interest).any("columns")]
+        chunk = chunk[chunk["TRAN_OUT"] == 0]
         return chunk
 
 def process_single_file(fname):
@@ -34,10 +44,12 @@ def process_single_file(fname):
 
     columns = next(pd.read_stata(fname, chunksize=1)).columns
     dx_columns = get_dx_cols(columns)
+    proc_columns = get_proc_cols(columns)
     used_columns = list()
     used_columns = dx_columns
+    used_columns += proc_columns
     used_columns += [c for c in columns if c.startswith("CM_")]
-    used_columns += ["AGE", "APRDRG_Risk_Mortality", "APRDRG_Severity", "FEMALE", "ZIPINC_QRTL", "PAY1", "HOSP_REGION", "DIED", "ORPROC"]
+    used_columns += ["AGE", "APRDRG_Risk_Mortality", "APRDRG_Severity", "FEMALE", "ZIPINC_QRTL", "PAY1", "HOSP_REGION", "DIED", "RACE", "LOS", "TRAN_OUT"]
     print(f"[{fname}] Using columns:")
     print(used_columns)
 
@@ -53,7 +65,7 @@ def process_single_file(fname):
     return df
 
 if __name__ == "__main__":
-    files_to_process = [f"data/NIS_{idx}_Full.dta" for idx in range(2010, 2011)]
+    files_to_process = [f"data/NIS_{idx}_Full.dta" for idx in range(2010, 2015)]
     print("Files:")
     print(files_to_process)
 

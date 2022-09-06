@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=32G
 #SBATCH --time=00:20:00
-#SBATCH --output ./logs/debug-%j.log
+#SBATCH --output ./logs/debug.log
 
 
 export PYTHONUNBUFFERED=TRUE

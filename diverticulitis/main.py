@@ -28,6 +28,9 @@ def general_stats(has_dm: pd.DataFrame, no_dm: pd.DataFrame):
     df_out = pd.concat([df_out, pd.DataFrame({"Diabetes": has_dm["RACE"].value_counts(normalize=True) * 100, "No Diabetes": no_dm["RACE"].value_counts(normalize=True) * 100})])
     df_out = df_out.rename(index={1.0: "RACE: White", 2.0: "RACE: Black", 3.0: "RACE: Hispanic", 4.0: "RACE: Asian or Pacific Islander", 5.0: "RACE: Native American", 6.0: "RACE: Other"})
 
+    df_out = pd.concat([df_out, pd.DataFrame({"Diabetes": has_dm["PAY1"].value_counts(normalize=True) * 100, "No Diabetes": no_dm["PAY1"].value_counts(normalize=True) * 100 })])
+    df_out = df_out.rename(index={1.0: "PAY1: Medicare", 2.0: "PAY1: Medicaid", 3.0: "PAY1: Private insurance", 4.0: "PAY1: Self-pay", 5.0: "PAY1: No charge", 6.0: "PAY1: Other"})
+
     return df_out
 
 
@@ -37,7 +40,7 @@ if __name__ == "__main__":
     proc_cols = get_proc_cols(base_df.columns)
 
     # All types of diverticulitis
-    print("Analyzing all diverticulitis cases...")
+    print("\nAll Diverticulitis:")
 
     has_dm = base_df[base_df["CM_DM"] == 1]
     no_dm = base_df[base_df["CM_DM"] == 0]
@@ -48,8 +51,10 @@ if __name__ == "__main__":
     print(table1)
     table1.to_csv("diverticulitis/diverticulitis_all_types.csv")
 
+    base_df["Perforation"] = (base_df[dx_cols].isin(["56213"]).any("columns")).astype("int")
+
     # Perforated diverticulitis subset
-    print("Analyzing perforated diverticulitis subset...")
+    print("\nPerforated Diverticulitis:")
     perf_df = base_df[base_df[dx_cols].isin(["56213"]).any("columns")]
     has_dm = perf_df[perf_df["CM_DM"] == 1]
     no_dm = perf_df[perf_df["CM_DM"] == 0]
@@ -70,7 +75,7 @@ if __name__ == "__main__":
     table2.to_csv("diverticulitis/diverticulitis_perforated.csv")
 
     # Perforated diverticulitis with IR subset
-    print("Analyzing perforated diverticulitis with IR subset...")
+    print("\nPerforated Diverticulitis w/IR:")
     pd_and_ir_df = perf_df[perf_df[proc_cols].isin(["5491"]).any("columns")]
     def count_ir_procs(row):
         return (row[proc_cols] == "5491").sum()
